@@ -1,0 +1,39 @@
+{
+  "name": "magpie-intern-ai",
+  "version": "0.1.0",
+  "description": "书生端砚 (InternAI Discovery) providers for Magpie / OpenCode — OpenAI 兼容与 Anthropic/SystemOne 双协议，多账号 API key。",
+  "type": "module",
+  "main": "index.mjs",
+  "exports": {
+    ".": "./index.mjs"
+  },
+  "files": [
+    "index.mjs",
+    "README.md"
+  ],
+  "keywords": [
+    "opencode",
+    "opencode-plugin",
+    "magpie",
+    "plugin",
+    "provider",
+    "auth",
+    "api",
+    "duanyan",
+    "intern-ai",
+    "internlm",
+    "书生端砚"
+  ],
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/ca-x/magpie-intern-ai.git"
+  },
+  "homepage": "https://github.com/ca-x/magpie-intern-ai#readme",
+  "bugs": {
+    "url": "https://github.com/ca-x/magpie-intern-ai/issues"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}
