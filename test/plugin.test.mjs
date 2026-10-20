@@ -29,8 +29,10 @@ test(`${name}: 钩子行为`, async () => {
   assert.equal(cfg2.provider.duanyan.api, OPENAI_BASE)
   assert.ok(hooks.auth.icon?.startsWith("data:image/"), "auth 应带图标")
 
-  // 登录方式：API key
+  // 登录方式：API key，带可选备注名（存 metadata.email 供宿主给账号命名）
   assert.equal(hooks.auth.methods[0]?.type, "api")
+  assert.equal(hooks.auth.methods[0]?.prompts?.[0]?.key, "email", "多账号应有备注名提问")
+  assert.equal(hooks.auth.maxConcurrency, 4, "应有并发上限")
 
   const savedFetch = globalThis.fetch
   try {

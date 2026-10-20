@@ -169,11 +169,23 @@ export const DuanYanAuth = async () => ({
   auth: {
     provider: "duanyan",
     icon: ICON,
+    maxConcurrency: 4, // 单账号并发上限，防触发平台限流；用户在供应商设置里可覆盖
     methods: [
       {
         type: "api",
         label: SIGN_IN_LABEL,
         placeholder: "在 discovery.intern-ai.org.cn 的控制台生成 API key",
+        // 多账号备注名：回答自动存进 metadata.email，宿主用它给账号命名
+        // （命名优先级 accountId → metadata.email），列表里一眼分清哪个 key 是谁；
+        // 不填则宿主用 key 尾几位命名。同备注名再次登录会替换原账号。
+        prompts: [
+          {
+            type: "text",
+            key: "email",
+            message: "账号备注名（可选，多账号时便于区分，如：公司号）",
+            placeholder: "留空则用 key 尾几位命名",
+          },
+        ],
       },
     ],
     loader: makeLoader(OPENAI_BASE),
