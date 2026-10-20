@@ -3,13 +3,15 @@
  *
  * https://discovery.intern-ai.org.cn
  *
- * 提供两个供应商，各自用同一个书生端砚 API key 登录：
- *   - duanyan        走 OpenAI 兼容协议  https://discovery-api.intern-ai.org.cn/v1
- *   - duanyan-claude 走 Anthropic / SystemOne 协议 https://discovery-api.intern-ai.org.cn
+ * 单供应商 duanyan，一个 API key 登录：主走 OpenAI 兼容协议
+ * （https://discovery-api.intern-ai.org.cn/v1）；动态清单里 id 含 claude 的
+ * 模型自动分流到 Anthropic / SystemOne 原生协议端点
+ * （https://discovery-api.intern-ai.org.cn，同域，模型级 provider 覆盖），
+ * 对宿主只显示一个提供商。
  *
  * 模型列表：登录后从 /v1/models 动态拉取（账号相关），不做静态写死。
  *
- * 只有 DuanYanOpenAI / DuanYanClaude 两个插件工厂被导出：宿主会把入口的
+ * 只有 DuanYanAuth 一个插件工厂被导出：宿主会把入口的
  * 每个导出函数都当作插件调用，辅助函数一律留在模块内部不导出。
  */
 
@@ -62,27 +64,50 @@ function signInExpiredError() {
 }
 
 /**
- * 合并动态模型清单：宿主 config 给出的字段（若有）保留在同 id 模型上，其余按 API id 生成。
+ * 合并动态模型清单。models 钩子返回的是 OpenCode Model 形状：
+ * 协议分流用 api: { id, url, npm }（社区 Zed/ZCode 同款写法）；
+ * 能力/价格平台清单里没有，给中性默认，避免宿主显示错误信息。
  */
 function mergeModels(providerModels, ids) {
   const merged = {}
   for (const id of ids) {
     const base = providerModels?.[id] ?? {}
-    merged[id] = { ...base, id, name: base.name ?? prettify(id) }
+    // claude 系模型分流到 Anthropic 原生协议端点（同域），保留
+    // server-side cache 等 Anthropic 特性；其余模型走 OpenAI 兼容端点。
+    const claude = /claude/i.test(id)
+    merged[id] = {
+      ...base,
+      id,
+      name: base.name ?? prettify(id),
+      api: {
+        id,
+        url: claude ? ANTHROPIC_BASE : OPENAI_BASE,
+        npm: claude ? "@ai-sdk/anthropic" : "@ai-sdk/openai-compatible",
+      },
+      status: "active",
+      cost: base.cost ?? { input: 0, output: 0, cache: { read: 0, write: 0 } },
+      capabilities: base.capabilities ?? {
+        temperature: true,
+        reasoning: false,
+        toolcall: true,
+        attachment: false,
+        input: { text: true },
+        output: { text: true },
+      },
+    }
   }
   return merged
 }
 
-function makeModelsHook({ filter } = {}) {
+function makeModelsHook() {
   return async (provider, { auth }) => {
     const key = typeof auth?.key === "string" ? auth.key : ""
     if (!key) return provider.models
     const result = await listRemoteModelIds(key)
     if (result.unauthorized) throw signInExpiredError()
     if (!result.ok) return provider.models
-    const ids = filter ? result.ids.filter(filter) : result.ids
-    if (ids.length === 0) return provider.models
-    return mergeModels(provider.models, ids)
+    if (result.ids.length === 0) return provider.models
+    return mergeModels(provider.models, result.ids)
   }
 }
 
@@ -90,7 +115,7 @@ function makeModelsHook({ filter } = {}) {
  * 每个账号共用的 loader：把请求发往指定 base，并附上该账号的 API key。
  * 多账号由宿主管理（auth 作用域隔离），这里不持有任何模块级状态。
  */
-function makeLoader(base, { anthropicStyle = false } = {}) {
+function makeLoader(base) {
   return (getAuth) =>
     getAuth().then((auth) => {
       if (auth?.type !== "api" || typeof auth.key !== "string" || !auth.key) return {}
@@ -114,7 +139,9 @@ function makeLoader(base, { anthropicStyle = false } = {}) {
           }
           const headers = new Headers(init?.headers)
           headers.set("authorization", `Bearer ${key}`)
-          if (anthropicStyle) headers.set("x-api-key", key)
+          // claude 系模型经模型级分流发往 Anthropic 协议端点，那里认 x-api-key；
+          // OpenAI 兼容端点忽略这个多余的头，可以始终带上。
+          headers.set("x-api-key", key)
           return fetch(input, { ...init, headers })
         },
       }
@@ -122,10 +149,11 @@ function makeLoader(base, { anthropicStyle = false } = {}) {
 }
 
 // ---------------------------------------------------------------------------
-// 供应商 1：书生端砚（OpenAI 兼容协议）
+// 书生端砚：单供应商。主走 OpenAI 兼容协议，claude 系模型在 models 钩子里
+// 用模型级 provider 覆盖分流到 Anthropic 原生协议端点（同域）。
 // ---------------------------------------------------------------------------
 
-export const DuanYanOpenAI = async () => ({
+export const DuanYanAuth = async () => ({
   config: async (cfg) => {
     cfg.provider ??= {}
     // 默认值在前、用户在 plugins.json 里的配置在后：补齐字段但不覆盖用户改动
@@ -156,39 +184,3 @@ export const DuanYanOpenAI = async () => ({
   },
 })
 
-// ---------------------------------------------------------------------------
-// 供应商 2：书生端砚 Claude（Anthropic / SystemOne 协议）
-// ---------------------------------------------------------------------------
-
-export const DuanYanClaude = async () => ({
-  config: async (cfg) => {
-    cfg.provider ??= {}
-    const was = cfg.provider["duanyan-claude"] ?? {}
-    cfg.provider["duanyan-claude"] = {
-      name: "书生端砚 (Claude)",
-      npm: "@ai-sdk/anthropic",
-      api: ANTHROPIC_BASE,
-      models: {}, // 纯动态：登录后由 provider.models 拉取并只保留 claude 系模型
-      ...was,
-    }
-  },
-  auth: {
-    provider: "duanyan-claude",
-    icon: ICON,
-    methods: [
-      {
-        type: "api",
-        label: SIGN_IN_LABEL,
-        placeholder: "在 discovery.intern-ai.org.cn 的控制台生成 API key",
-      },
-    ],
-    loader: makeLoader(ANTHROPIC_BASE, { anthropicStyle: true }),
-  },
-  provider: {
-    id: "duanyan-claude",
-    // Anthropic 协议端点只服务 Claude 系模型，动态清单按 id 过滤
-    models: makeModelsHook({
-      filter: (id) => /claude/i.test(id),
-    }),
-  },
-})
