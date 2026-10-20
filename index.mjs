@@ -7,7 +7,7 @@
  *   - duanyan        走 OpenAI 兼容协议  https://discovery-api.intern-ai.org.cn/v1
  *   - duanyan-claude 走 Anthropic / SystemOne 协议 https://discovery-api.intern-ai.org.cn
  *
- * 模型列表：登录后从 /v1/models 动态拉取（账号相关），拉取失败时回退到内置静态列表。
+ * 模型列表：登录后从 /v1/models 动态拉取（账号相关），不做静态写死。
  */
 
 const OPENAI_BASE = "https://discovery-api.intern-ai.org.cn/v1"
@@ -16,27 +16,6 @@ const ANTHROPIC_BASE = "https://discovery-api.intern-ai.org.cn"
 const MODELS_URL = `${OPENAI_BASE}/models`
 
 const SIGN_IN_LABEL = "书生端砚 API key"
-
-// ---------------------------------------------------------------------------
-// 静态兜底模型（仅在 /v1/models 拉取失败时使用）
-// 书生端砚的实际可用模型随账号/平台变化，以动态拉取结果为准；
-// 如发现兜底条目不准确，欢迎提 issue / PR 修正。
-// ---------------------------------------------------------------------------
-const FALLBACK_OPENAI_MODELS = {
-  "internlm4-flash": {
-    name: "InternLM4 Flash",
-    limit: { context: 32768, output: 8192 },
-    tool_call: true,
-  },
-}
-
-const FALLBACK_CLAUDE_MODELS = {
-  "claude-sonnet-4-5": {
-    name: "Claude Sonnet 4.5",
-    limit: { context: 200000, output: 64000 },
-    tool_call: true,
-  },
-}
 
 // ---------------------------------------------------------------------------
 // 内部工具（不从入口导出；插件入口的每个导出函数都会被宿主当作插件调用）
@@ -78,7 +57,7 @@ function signInExpiredError() {
 }
 
 /**
- * 合并动态模型清单与兜底：API 成功时以动态为准（账号没有的兜底模型不再列出）。
+ * 合并动态模型清单：宿主 config 给出的字段（若有）保留在同 id 模型上，其余按 API id 生成。
  */
 function mergeModels(providerModels, ids) {
   const merged = {}
@@ -89,7 +68,7 @@ function mergeModels(providerModels, ids) {
   return merged
 }
 
-function makeModelsHook({ fallback, filter }) {
+function makeModelsHook({ filter } = {}) {
   return async (provider, { auth }) => {
     const key = typeof auth?.key === "string" ? auth.key : ""
     if (!key) return provider.models
@@ -98,7 +77,7 @@ function makeModelsHook({ fallback, filter }) {
     if (!result.ok) return provider.models
     const ids = filter ? result.ids.filter(filter) : result.ids
     if (ids.length === 0) return provider.models
-    return mergeModels(provider.models ?? fallback, ids)
+    return mergeModels(provider.models, ids)
   }
 }
 
@@ -135,7 +114,7 @@ export const DuanYanOpenAI = async () => ({
       name: "书生端砚",
       npm: "@ai-sdk/openai-compatible",
       api: OPENAI_BASE,
-      models: FALLBACK_OPENAI_MODELS,
+      models: {}, // 纯动态：登录后由 provider.models 从 /v1/models 拉取
     }
   },
   auth: {
@@ -151,7 +130,7 @@ export const DuanYanOpenAI = async () => ({
   },
   provider: {
     id: "duanyan",
-    models: makeModelsHook({ fallback: FALLBACK_OPENAI_MODELS }),
+    models: makeModelsHook(),
   },
 })
 
@@ -166,7 +145,7 @@ export const DuanYanClaude = async () => ({
       name: "书生端砚 (Claude)",
       npm: "@ai-sdk/anthropic",
       api: ANTHROPIC_BASE,
-      models: FALLBACK_CLAUDE_MODELS,
+      models: {}, // 纯动态：登录后由 provider.models 拉取并只保留 claude 系模型
     }
   },
   auth: {
@@ -184,7 +163,6 @@ export const DuanYanClaude = async () => ({
     id: "duanyan-claude",
     // Anthropic 协议端点只服务 Claude 系模型，动态清单按 id 过滤
     models: makeModelsHook({
-      fallback: FALLBACK_CLAUDE_MODELS,
       filter: (id) => /claude/i.test(id),
     }),
   },
