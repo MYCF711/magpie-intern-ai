@@ -73,8 +73,13 @@ Magpie → 设置 → 插件 → 发现/安装，粘贴本仓库地址或 npm �
 
 ## 开发与测试
 
+本地单元测试（不需要网络，模拟宿主调用各钩子）：
+
 ```bash
-# 沙箱测试，绝不在日常使用的 magpie 上测
+npm test   # node --test test/*.test.mjs，push 时 CI 也会跑
+```
+
+沙箱集成测试（绝不在日常使用的 magpie 上测）：
 sb=$(mktemp -d)
 m() { env HOME="$sb" XDG_CONFIG_HOME="$sb/.config" XDG_CACHE_HOME="$sb/.cache" magpie "$@"; }
 
