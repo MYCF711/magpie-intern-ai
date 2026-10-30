@@ -1,12 +1,13 @@
 # magpie-intern-ai
 
-书生端砚（[InternAI Discovery](https://discovery.intern-ai.org.cn)）的 [Magpie](https://usemagpie.ai) / [OpenCode](https://opencode.ai) 供应商插件。用你自己的书生端砚 API key，把它的模型接入 Magpie / OpenCode。
+书生端砚（[InternAI Discovery](https://discovery.intern-ai.org.cn)）的 [Magpie](https://usemagpie.ai) / [OpenCode](https://opencode.ai) 供应商插件。既可以用账号登录态自动生成 API key、自动读额度，也可以继续手动填 key。
 
 - **单一供应商、一次登录**：只显示一个"书生端砚"，模型列表里自动处理协议分流
 - **协议自动分流**：普通模型走 OpenAI 兼容协议；id 含 `claude` 的模型自动分流到 Anthropic / SystemOne 原生协议（同域），保留 server-side cache 等 Anthropic 特性
 - **多账号**：每个账号独立登录、独立配置，互不干扰
 - **模型列表动态获取**：登录后从 `/v1/models` 拉取账号实际可用的模型，不写死任何静态列表
-- **零运行时依赖**
+- **自动额度**：本机登录的账号直接读 `credits/balance` 的 5 小时 / 7 天窗口，卡片上显示已用比例与重置时间
+- **零运行时依赖**（只多一个纯 JS 的 `snappyjs`，用于读浏览器 Local Storage）
 
 ## 供应商
 
@@ -18,7 +19,19 @@ claude 系模型在动态列表里自动挂 `@ai-sdk/anthropic` + `https://disco
 
 > 注：如果供应商 id 在你的 Magpie 版本里与内置订阅冲突，宿主会自动改名为 `duanyan-plugin`，属于正常行为。
 
-## 获取 API key
+## 本机登录（推荐）
+
+先在 Edge / Chrome 打开 [discovery.intern-ai.org.cn](https://discovery.intern-ai.org.cn) 登录一次（插件读的是这个浏览器里的 `uaa-token`，只读，不上传）。然后在 magpie 里选「本机登录（读取浏览器 / 端砚客户端）」：
+
+1. 插件读浏览器 Local Storage / 书生端砚客户端的登录态；
+2. 用登录态调 `/api/tokenplan/v1/credits/balance` 验证并展示额度；
+3. 调 `POST /api/tokenplan/v1/keys` 建一个名为 `magpie-<主机名>` 的 API key，存进 magpie 的这个账号。
+
+不写死 key、不碰聊天内容。账号卡片沿用 magpie 的账号名（手机号打码，如 `138****8000`）。
+
+## 手动 API key
+
+也可以继续手动填 key：
 
 1. 打开 [discovery.intern-ai.org.cn](https://discovery.intern-ai.org.cn)，注册 / 登录你的账号。
 2. 在控制台（API 管理）里生成 API key。
@@ -30,7 +43,7 @@ claude 系模型在动态列表里自动挂 `@ai-sdk/anthropic` + `https://disco
 
 ```bash
 # 从 GitHub 直接安装
-magpie plugin add github:ca-x/magpie-intern-ai
+magpie plugin add github:MYCF711/magpie-intern-ai
 
 # 或从 npm
 magpie plugin add magpie-intern-ai
@@ -52,7 +65,7 @@ magpie provider test duanyan
 ### OpenCode
 
 ```bash
-opencode plugin add ca-x/magpie-intern-ai
+opencode plugin add MYCF711/magpie-intern-ai
 ```
 
 OpenCode 会忽略 Magpie 专属行为，登录方式与供应商配置照常可用。
