@@ -1,8 +1,10 @@
-# magpie-intern-ai
+# 书生·端砚 Intern InkStone for magpie
 
-书生端砚（[InternAI Discovery](https://discovery.intern-ai.org.cn)）的 [Magpie](https://usemagpie.ai) / [OpenCode](https://opencode.ai) 供应商插件。既可以用账号登录态自动生成 API key、自动读额度，也可以继续手动填 key。
+书生·端砚（[Intern InkStone](https://discovery.intern-ai.org.cn)，上海人工智能实验室）的 [Magpie](https://usemagpie.ai) / [OpenCode](https://opencode.ai) 供应商插件。既可以用账号登录态自动生成 API key、自动读额度，也可以继续手动填 key。
 
-- **单一供应商、一次登录**：只显示一个"书生端砚"，模型列表里自动处理协议分流
+> 官方名依据：<https://discovery.intern-ai.org.cn/> 的页面标题为 `<title>书生·端砚 Intern InkStone</title>`，meta description 也写作「书生·端砚（Intern InkStone）」。本插件的 `magpie.name` 与 provider 名都采用这一官方写法。
+
+- **单一供应商、一次登录**：只显示一个"书生·端砚 Intern InkStone"，模型列表里自动处理协议分流
 - **协议自动分流**：普通模型走 OpenAI 兼容协议；id 含 `claude` 的模型自动分流到 Anthropic / SystemOne 原生协议（同域），保留 server-side cache 等 Anthropic 特性
 - **多账号**：每个账号独立登录、独立配置，互不干扰
 - **模型列表动态获取**：登录后从 `/v1/models` 拉取账号实际可用的模型，不写死任何静态列表

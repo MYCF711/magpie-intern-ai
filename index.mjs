@@ -29,6 +29,7 @@ import {
 } from "./src/inkstone.mjs"
 
 const OPENAI_BASE = "https://discovery-api.intern-ai.org.cn/v1"
+const PROVIDER_NAME = "书生·端砚 Intern InkStone"
 const ANTHROPIC_BASE = "https://discovery-api.intern-ai.org.cn"
 // 动态模型清单端点：标准 OpenAI 风格，返回 { data: [{ id, … }] }
 const MODELS_URL = `${OPENAI_BASE}/models`
@@ -172,7 +173,7 @@ export const DuanYanAuth = async (_ctx, options = {}) => ({
     // 默认值在前、用户在 plugins.json 里的配置在后：补齐字段但不覆盖用户改动
     const was = cfg.provider["duanyan"] ?? {}
     cfg.provider["duanyan"] = {
-      name: "书生端砚",
+      name: PROVIDER_NAME,
       npm: "@ai-sdk/openai-compatible",
       api: OPENAI_BASE,
       models: {}, // 纯动态：登录后由 provider.models 从 /v1/models 拉取
