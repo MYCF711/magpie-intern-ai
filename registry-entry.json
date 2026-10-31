@@ -1,0 +1,11 @@
+{
+  "package": "magpie-intern-ai",
+  "name": "书生·端砚 Intern InkStone",
+  "providers": [
+    "duanyan"
+  ],
+  "summary": {
+    "en": "Intern InkStone (Shanghai AI Laboratory): one duanyan provider — local-session or API-key sign-in, live model catalog, automatic API-key creation from the account session, credit windows, and OpenAI-compatible plus Anthropic/SystemOne protocol routing.",
+    "zh": "书生·端砚 Intern InkStone（上海人工智能实验室）：单一 duanyan 供应商 —— 本机登录态或 API key 登录、实时模型目录、用登录态自动生成 API key、额度窗口，以及 OpenAI 兼容与 Anthropic/SystemOne 协议分流。"
+  }
+}

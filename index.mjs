@@ -15,7 +15,21 @@
  * 每个导出函数都当作插件调用，辅助函数一律留在模块内部不导出。
  */
 
+import {
+  apiKeyName,
+  fetchBalance,
+  fetchPackages,
+  fetchValidate,
+  createApiKey,
+  maskPhone,
+  planNameFromPackages,
+  readDesktopCredential,
+  readLocalLogins,
+  usageFromBalance,
+} from "./src/inkstone.mjs"
+
 const OPENAI_BASE = "https://discovery-api.intern-ai.org.cn/v1"
+const PROVIDER_NAME = "书生·端砚 Intern InkStone"
 const ANTHROPIC_BASE = "https://discovery-api.intern-ai.org.cn"
 // 动态模型清单端点：标准 OpenAI 风格，返回 { data: [{ id, … }] }
 const MODELS_URL = `${OPENAI_BASE}/models`
@@ -153,13 +167,13 @@ function makeLoader(base) {
 // 用模型级 provider 覆盖分流到 Anthropic 原生协议端点（同域）。
 // ---------------------------------------------------------------------------
 
-export const DuanYanAuth = async () => ({
+export const DuanYanAuth = async (_ctx, options = {}) => ({
   config: async (cfg) => {
     cfg.provider ??= {}
     // 默认值在前、用户在 plugins.json 里的配置在后：补齐字段但不覆盖用户改动
     const was = cfg.provider["duanyan"] ?? {}
     cfg.provider["duanyan"] = {
-      name: "书生端砚",
+      name: PROVIDER_NAME,
       npm: "@ai-sdk/openai-compatible",
       api: OPENAI_BASE,
       models: {}, // 纯动态：登录后由 provider.models 从 /v1/models 拉取
@@ -187,12 +201,93 @@ export const DuanYanAuth = async () => ({
           },
         ],
       },
+      {
+        type: "api",
+        keyless: true,
+        label: "本机登录（读取浏览器 / 端砚客户端）",
+        // 不需要用户粘贴 key：读浏览器 Local Storage / 端砚客户端里已登录的 token，
+        // 自动读额度、自动建一个 magpie 专用的 API key。没登录时让用户先登录一次。
+        prompts: [
+          {
+            type: "text",
+            key: "email",
+            message: "账号备注名（可选，多账号时便于区分，如：公司号）",
+            placeholder: "留空则用手机号打码命名",
+          },
+        ],
+        async authorize(inputs = {}) {
+          const readLocal = options.readLocalCredential ?? options.readLocalCredentials ?? readLocalLogins
+          const found = await readLocal(options)
+          const candidates = Array.isArray(found) ? found : [found]
+          if (candidates.length === 0) {
+            throw new Error("没有找到书生端砚登录态：请先在 Edge / Chrome 打开 discovery.intern-ai.org.cn 登录一次，或在书生端砚客户端登录")
+          }
+          let lastError = null
+          let created = null
+          let phone = ""
+          for (const local of candidates) {
+            if (!local?.token) continue
+            try {
+              const who = await fetchValidate(local.token, options.fetcher)
+              phone = maskPhone(who?.phone)
+              created = await createApiKey(local.token, apiKeyName(), { fetcher: options.fetcher })
+              if (!created?.key) throw new Error("书生端砚没有返回 API key")
+              return {
+                type: "success",
+                key: created.key,
+                metadata: {
+                  ...(inputs.email ? { email: inputs.email } : phone ? { email: phone } : {}),
+                  uaaToken: local.token,
+                  keyId: created.id,
+                  ...(phone ? { phone } : {}),
+                  ...(local.expiresAtMs ? { tokenExpiresAt: local.expiresAtMs } : {}),
+                },
+              }
+            } catch (e) {
+              lastError = e
+              if (e?.signIn !== "expired") break
+            }
+          }
+          throw lastError ?? new Error("书生端砚登录态不可用")
+        },
+      },
     ],
     loader: makeLoader(OPENAI_BASE),
+    // 额度：本机登录的账号在 metadata 里带着 uaa-token；手动 key 的账号没有，
+    // 只能如实说看不到额度，不能编造。
+    async usage(getAuth) {
+      const auth = await getAuth()
+      const token = auth?.metadata?.uaaToken
+      if (!token) {
+        return { error: "这个账号是手动 API key，未保存书生端砚登录态，看不到额度", windows: [] }
+      }
+      try {
+        const [balance, packages] = await Promise.all([
+          fetchBalance(token, options.fetcher),
+          fetchPackages(token, options.fetcher).catch(() => null),
+        ])
+        return usageFromBalance(balance, {
+          user: auth.metadata.phone || undefined,
+          plan: planNameFromPackages(packages),
+        })
+      } catch (e) {
+        const out = { error: e?.message ?? String(e), windows: [] }
+        if (e?.signIn === "expired") out.signIn = "expired"
+        return out
+      }
+    },
   },
   provider: {
     id: "duanyan",
     models: makeModelsHook(),
   },
 })
+
+// for tests (a plain object is not treated as a plugin by the host)
+export const _internal = {
+  maskPhone,
+  usageFromBalance,
+  readDesktopCredential,
+  readLocalLogins,
+}
 
