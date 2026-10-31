@@ -53,6 +53,7 @@ jobs:
       - name: 发布前测试与打包清单
         run: |
           set -euo pipefail
+          npm ci
           npm test
           npm pack --dry-run
 
